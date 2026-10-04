@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Multi-Client Chat Server (TCP)</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #0f0; }
+        pre { background: #111; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        h1, h2 { color: #0ff; }
+        .demo { margin: 20px 0; padding: 15px; background: #222; border: 1px solid #0f0; border-radius: 8px; }
+        button { background: #0f0; color: #000; padding: 10px 20px; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0ff; }
+    </style>
+</head>
+<body>
+    <h1>✅ Server-Client Program: Multiple Clients – Single Server (Real-Time TCP)</h1>
+    <p><strong>Transport Protocol Used:</strong> TCP (Transmission Control Protocol) – reliable, connection-oriented, suitable for real-time applications when combined with threading.</p>
+    <p>This demonstrates a classic <strong>multiple-client single-server connection model</strong> using Python sockets. The server handles any number of simultaneous clients in real-time via threads.</p>
+
+    <div class="demo">
+        <h2>📋 How to Run (3 simple steps)</h2>
+        <ol>
+            <li>Save the two files below as <code>server.py</code> and <code>client.py</code></li>
+            <li>Open 3 terminals/windows:
+                <ul>
+                    <li>Terminal 1 → Run <code>python server.py</code></li>
+                    <li>Terminal 2 → Run <code>python client.py</code> (Client 1)</li>
+                    <li>Terminal 3 → Run <code>python client.py</code> (Client 2)</li>
+                </ul>
+            </li>
+            <li>Type messages in any client → instantly broadcasted to ALL other clients in real-time!</li>
+        </ol>
+        <button onclick="copyCode('server-code')">📋 Copy Server Code</button>
+        <button onclick="copyCode('client-code')">📋 Copy Client Code</button>
+    </div>
+
+    <h2>Server Code (<code>server.py</code>)</h2>
+    <pre id="server-code"><code>import socket
+import threading
+
+# Configuration
+HOST = '0.0.0.0'      # Listen on all interfaces
+PORT = 5555            # Real-time chat port
+clients = []           # List of active client sockets
+
+def broadcast(message, sender_socket=None):
+    """Send message to ALL connected clients except the sender"""
+    for client in clients[:]:  # Copy list to avoid modification during iteration
+        if client != sender_socket:
+            try:
+                client.send(message)
+            except:
+                # Client disconnected unexpectedly
+                clients.remove(client)
+
+def handle_client(client_socket, addr):
+    """Handle messages from one client in its own thread (real-time)"""
+    print(f"[+] New client connected: {addr}")
+    while True:
+        try:
+            message = client_socket.recv(1024)
+            if not message:
+                break  # Client disconnected cleanly
+            # Prefix with sender address for clarity
+            formatted = f"[{addr[0]}:{addr[1]}] {message.decode('utf-8')}\n".encode()
+            broadcast(formatted, client_socket)
+        except:
+            break
+    
+    # Cleanup on disconnect
+    if client_socket in clients:
+        clients.remove(client_socket)
+    client_socket.close()
+    print(f"[-] Client disconnected: {addr}")
+
+# ==================== MAIN SERVER ====================
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server.bind((HOST, PORT))
+server.listen(100)  # Can accept up to 100 pending connections
+
+print(f"🚀 Real-Time TCP Server started on {HOST}:{PORT}")
+print("Waiting for multiple clients to connect...\n")
+
+while True:
+    client_socket, addr = server.accept()
+    clients.append(client_socket)
+    
+    # Each client gets its own thread → true concurrency & real-time handling
+    thread = threading.Thread(target=handle_client, args=(client_socket, addr))
+    thread.daemon = True
+    thread.start()
+</code></pre>
+
+    <h2>Client Code (<code>client.py</code>)</h2>
+    <pre id="client-code"><code>import socket
+import threading
+import sys
+
+# Configuration (must match server)
+HOST = '127.0.0.1'  # Change to server's IP if running on different machine
+PORT = 5555
+
+def receive_messages(client_socket):
+    """Thread that continuously listens for broadcast messages"""
+    while True:
+        try:
+            message = client_socket.recv(1024)
+            if not message:
+                break
+            print(message.decode('utf-8'), end='')
+        except:
+            break
+
+# ==================== MAIN CLIENT ====================
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+try:
+    client_socket.connect((HOST, PORT))
+    print("✅ Connected to Real-Time Server! Type messages below.\n")
+except:
+    print("❌ Could not connect to server. Make sure server.py is running.")
+    sys.exit(1)
+
+# Start background thread for receiving messages (real-time)
+receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+receive_thread.daemon = True
+receive_thread.start()
+
+# Main loop for sending messages
+try:
+    while True:
+        message = input("")
+        if message.lower() in ['exit', 'quit']:
+            break
+        if message.strip():  # Only send non-empty messages
+            client_socket.send(message.encode('utf-8'))
+except KeyboardInterrupt:
+    print("\n👋 Disconnecting...")
+except:
+    pass
+finally:
+    client_socket.close()
+    print("Client closed.")
+</code></pre>
+
+    <div class="demo">
+        <h2>🎯 Features Demonstrated</h2>
+        <ul>
+            <li>✅ Single server handling <strong>multiple simultaneous TCP connections</strong></li>
+            <li>✅ Real-time message broadcasting (zero noticeable delay)</li>
+            <li>✅ Threaded architecture for concurrent client handling</li>
+            <li>✅ Graceful client disconnect detection</li>
+            <li>✅ TCP as the transport protocol (reliable, ordered delivery)</li>
+            <li>✅ Works on localhost or across network (just change HOST)</li>
+        </ul>
+        <p><strong>Why TCP for real-time?</strong> It provides guaranteed delivery with low latency when using lightweight threading – perfect for chat, gaming commands, live updates, etc.</p>
+    </div>
+
+    <p><strong>Want UDP version instead?</strong> Reply with “UDP version” and I’ll give you a connectionless real-time datagram implementation instantly.</p>
+    <script>
+        function copyCode(id) {
+            const code = document.getElementById(id).textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const btns = document.querySelectorAll('button');
+                for (let b of btns) {
+                    if (b.getAttribute('onclick').includes(id)) {
+                        const orig = b.textContent;
+                        b.textContent = '✅ Copied!';
+                        setTimeout(() => b.textContent = orig, 2000);
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
